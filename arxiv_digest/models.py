@@ -20,11 +20,21 @@ class Paper:
 
 
 @dataclass(frozen=True, slots=True)
+class ThemeMatch:
+    """One semantic match between a paper and a configured research theme."""
+
+    name: str
+    similarity: float
+
+
+@dataclass(frozen=True, slots=True)
 class RankedPaper:
-    """A paper plus its keyword-ranking details."""
+    """A paper plus explainable hybrid-ranking details."""
 
     paper: Paper
     score: float
     positive_matches: tuple[str, ...]
     negative_matches: tuple[str, ...]
-
+    lexical_score: float = 0.0
+    semantic_score: float = 0.0
+    semantic_matches: tuple[ThemeMatch, ...] = ()

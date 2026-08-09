@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import re
+import time
 import xml.etree.ElementTree as ET
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 import requests
 
+from .config import CategoryGroup
 from .models import Paper
 
 API_URL = "https://export.arxiv.org/api/query"
@@ -24,45 +27,38 @@ class ArxivAPIError(RuntimeError):
 class ArxivClient:
     """Fetch recent paper metadata from the official arXiv API."""
 
-    def __init__(self, timeout_seconds: float = 60.0) -> None:
+    def __init__(
+        self,
+        timeout_seconds: float = 60.0,
+        *,
+        session: requests.Session | None = None,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
         self.timeout_seconds = timeout_seconds
-        self.session = requests.Session()
+        self.session = session or requests.Session()
+        self.sleep = sleep
         self.session.headers.update(
-            {"User-Agent": "paper-finder/0.1 (personal research digest)"}
+            {"User-Agent": "paper-finder/0.2 (personal research digest)"}
         )
 
     def fetch_recent(
         self,
-        categories: tuple[str, ...],
+        category_groups: tuple[CategoryGroup, ...],
         lookback_hours: int,
-        fetch_limit: int,
+        request_delay_seconds: float,
     ) -> list[Paper]:
-        """Fetch newest category matches and retain papers inside the lookback window."""
-        category_query = " OR ".join(f"cat:{category}" for category in categories)
-        params = {
-            "search_query": category_query,
-            "start": 0,
-            "max_results": fetch_limit,
-            "sortBy": "submittedDate",
-            "sortOrder": "descending",
+        """Query each category group, then filter and deduplicate the results."""
+        papers: list[Paper] = []
+        for index, group in enumerate(category_groups):
+            if index:
+                self.sleep(request_delay_seconds)
+            papers.extend(self._fetch_group(group))
+
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
+        requested_categories = {
+            category for group in category_groups for category in group.categories
         }
 
-        try:
-            response = self.session.get(
-                API_URL,
-                params=params,
-                timeout=self.timeout_seconds,
-            )
-            response.raise_for_status()
-        except requests.RequestException as exc:
-            raise ArxivAPIError(f"arXiv API request failed: {exc}") from exc
-
-        papers = self._parse_feed(response.content)
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
-        requested_categories = set(categories)
-
-        # The API normally returns each paper once for a combined query. Keeping an
-        # explicit ID map also protects later multi-query implementations from cross-lists.
         deduplicated: dict[str, Paper] = {}
         for paper in papers:
             if paper.published_at < cutoff:
@@ -76,6 +72,33 @@ class ArxivClient:
             key=lambda paper: paper.published_at,
             reverse=True,
         )
+
+    def _fetch_group(self, group: CategoryGroup) -> list[Paper]:
+        """Fetch one bounded page for a related group of categories."""
+        category_query = " OR ".join(
+            f"cat:{category}" for category in group.categories
+        )
+        params = {
+            "search_query": category_query,
+            "start": 0,
+            "max_results": group.fetch_limit,
+            "sortBy": "submittedDate",
+            "sortOrder": "descending",
+        }
+
+        try:
+            response = self.session.get(
+                API_URL,
+                params=params,
+                timeout=self.timeout_seconds,
+            )
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise ArxivAPIError(
+                f"arXiv API request failed for category group '{group.name}': {exc}"
+            ) from exc
+
+        return self._parse_feed(response.content)
 
     @staticmethod
     def _parse_feed(content: bytes) -> list[Paper]:
@@ -141,4 +164,3 @@ def _parse_datetime(value: str) -> datetime:
 
 def _clean_text(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
-

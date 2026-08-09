@@ -1,33 +1,290 @@
 arxiv:
-  categories:
-    - cs.LG
-    - stat.ML
-    - cs.AI
-    - stat.ME
-  lookback_hours: 48
-  # Limits the number of newest API records inspected before date filtering.
-  fetch_limit: 300
+  # The workflow runs once per day, so this avoids overlapping daily digests.
+  lookback_hours: 24
+
+  # arXiv asks clients making repeated requests to wait three seconds between calls.
+  request_delay_seconds: 3.0
+
+  # Groups are queried separately so busy fields cannot crowd niche subjects out of
+  # one shared result page. Papers cross-listed between groups are deduplicated.
+  category_groups:
+    - name: core_ml_and_statistics
+      categories:
+        - cs.LG
+        - stat.ML
+        - cs.AI
+        - stat.ME
+        - math.ST
+        - stat.CO
+      fetch_limit: 300
+
+    - name: mathematical_foundations
+      categories:
+        - math.CT
+        - math.PR
+        - math.DG
+        - math.OC
+      fetch_limit: 180
+
+    - name: formal_methods_and_control
+      categories:
+        - cs.LO
+        - cs.PL
+        - cs.SY
+        - eess.SY
+        - cs.MA
+        - cs.RO
+      fetch_limit: 220
+
+    - name: ai_safety_and_society
+      categories:
+        - cs.CY
+      fetch_limit: 120
+
+    - name: generative_modalities
+      categories:
+        - cs.CL
+        - cs.CV
+      fetch_limit: 300
 
 ranking:
-  max_papers: 10
-  # A title occurrence counts this many times as much as an abstract occurrence.
-  title_multiplier: 2.0
-  positive_keywords:
-    uncertainty calibration: 5.0
-    probabilistic prediction: 4.0
-    kernel methods: 3.0
-    RKHS: 3.0
-    conditional distributions: 4.0
-    conditional mean embeddings: 5.0
-    causal inference: 4.0
-    decision making: 3.0
-    trustworthy machine learning: 4.0
-    distribution shift: 4.0
+  max_papers: 5
 
-  # Optional penalties use the same title/abstract matching rule. For example:
-  # negative_keywords:
-  #   survey: 1.0
-  #   tutorial: 0.5
+  # An exact alias in a title counts this many times as much as one in an abstract.
+  title_multiplier: 2.0
+
+  # Each theme has a semantic description plus familiar aliases for exact matching.
+  # The weight affects both forms of matching. Descriptions should express the ideas
+  # you want, not merely list keywords.
+  themes:
+    - name: Applied category theory and categorical probability
+      weight: 1.5
+      description: >
+        Applications of category theory to probability, statistics, machine learning,
+        artificial intelligence, compositional systems, Markov categories, string
+        diagrams, categorical probability, and categorical semantics of inference.
+      aliases:
+        - applied category theory
+        - categorical probability
+        - Markov category
+        - Markov categories
+        - categorical semantics
+        - string diagrams
+        - compositional probability
+
+    - name: Uncertainty quantification
+      weight: 1.4
+      description: >
+        Quantifying epistemic and aleatoric uncertainty in machine learning and
+        statistics, including predictive uncertainty, Bayesian uncertainty,
+        uncertainty estimation, uncertainty propagation, and reliable confidence.
+      aliases:
+        - uncertainty quantification
+        - uncertainty estimation
+        - predictive uncertainty
+        - epistemic uncertainty
+        - aleatoric uncertainty
+        - uncertainty propagation
+
+    - name: Calibration and probabilistic prediction
+      weight: 1.4
+      description: >
+        Calibration of probabilistic predictions and predictive distributions,
+        including conformal prediction, proper scoring rules, forecast evaluation,
+        coverage guarantees, and calibrated uncertainty.
+      aliases:
+        - uncertainty calibration
+        - probabilistic prediction
+        - predictive distribution
+        - calibrated prediction
+        - conformal prediction
+        - proper scoring rule
+        - proper scoring rules
+        - coverage guarantee
+
+    - name: Robust, reliable, and trustworthy machine learning
+      weight: 1.4
+      description: >
+        Machine learning systems that remain robust, reliable, trustworthy, safe,
+        interpretable, fair, and dependable under failures, adversaries, uncertainty,
+        misspecification, or changing environments.
+      aliases:
+        - robust machine learning
+        - robust ML
+        - reliable machine learning
+        - reliable ML
+        - trustworthy machine learning
+        - trustworthy ML
+        - dependable machine learning
+        - adversarial robustness
+
+    - name: AI safety
+      weight: 1.4
+      description: >
+        Technical AI safety, alignment, oversight, scalable supervision, reward
+        misspecification, goal misgeneralization, evaluations of dangerous capability,
+        robustness of advanced AI systems, and reducing catastrophic AI risk.
+      aliases:
+        - AI safety
+        - artificial intelligence safety
+        - AI alignment
+        - scalable oversight
+        - scalable supervision
+        - reward misspecification
+        - goal misgeneralization
+        - catastrophic risk
+
+    - name: Distribution shift and out-of-distribution generalisation
+      weight: 1.3
+      description: >
+        Learning and prediction when training and deployment distributions differ,
+        including dataset shift, domain generalisation, out-of-distribution detection,
+        covariate shift, concept drift, and robust adaptation.
+      aliases:
+        - distribution shift
+        - dataset shift
+        - covariate shift
+        - concept drift
+        - out-of-distribution
+        - domain generalization
+        - domain generalisation
+        - OOD detection
+
+    - name: Kernel methods and RKHS
+      weight: 1.3
+      description: >
+        Kernel methods, reproducing kernel Hilbert spaces, operator-valued kernels,
+        kernel learning, Gaussian processes, integral probability metrics, and
+        nonparametric statistical learning with kernels.
+      aliases:
+        - kernel method
+        - kernel methods
+        - reproducing kernel Hilbert space
+        - reproducing kernel Hilbert spaces
+        - RKHS
+        - operator-valued kernel
+        - kernel learning
+
+    - name: Conditional distributions and mean embeddings
+      weight: 1.5
+      description: >
+        Estimation and representation of conditional probability distributions,
+        conditional density and distribution regression, conditional mean embeddings,
+        kernel embeddings of distributions, and probabilistic operators.
+      aliases:
+        - conditional distribution
+        - conditional distributions
+        - conditional density estimation
+        - distribution regression
+        - conditional mean embedding
+        - conditional mean embeddings
+        - kernel mean embedding
+        - kernel mean embeddings
+
+    - name: Causal inference and decision making
+      weight: 1.3
+      description: >
+        Causal inference, causal discovery, counterfactual reasoning, interventions,
+        sequential decision making, reinforcement learning, decision theory, planning,
+        and decisions under uncertainty.
+      aliases:
+        - causal inference
+        - causal discovery
+        - causal representation learning
+        - counterfactual reasoning
+        - decision making
+        - decision-making
+        - decision theory
+        - decisions under uncertainty
+
+    - name: Generative modelling
+      weight: 1.2
+      description: >
+        Generative models of complex data and probability distributions, including
+        diffusion and score-based models, normalizing flows, variational models,
+        energy-based models, and statistically principled generative learning.
+      aliases:
+        - generative modeling
+        - generative modelling
+        - generative model
+        - generative models
+        - diffusion model
+        - diffusion models
+        - score-based model
+        - normalizing flow
+        - normalizing flows
+
+    - name: Probabilistic programming
+      weight: 1.3
+      description: >
+        Probabilistic programming languages and systems, automated Bayesian inference,
+        differentiable probabilistic programs, program transformations for inference,
+        and semantics or verification of probabilistic programs.
+      aliases:
+        - probabilistic programming
+        - probabilistic program
+        - probabilistic programs
+        - probabilistic programming language
+        - automated Bayesian inference
+        - differentiable programming
+
+    - name: Formal methods for AI
+      weight: 1.3
+      description: >
+        Formal verification, logic, theorem proving, model checking, program analysis,
+        certified robustness, and mathematical specifications or guarantees for
+        machine learning and artificial intelligence systems.
+      aliases:
+        - formal methods
+        - formal verification
+        - neural network verification
+        - certified robustness
+        - theorem proving
+        - model checking
+        - proof assistant
+
+    - name: Imprecise probability
+      weight: 1.4
+      description: >
+        Imprecise probabilities and uncertainty representations beyond a single
+        probability measure, including credal sets, lower and upper probabilities,
+        belief functions, robust Bayes, possibility theory, and partial identification.
+      aliases:
+        - imprecise probability
+        - imprecise probabilities
+        - credal set
+        - credal sets
+        - lower probability
+        - upper probability
+        - robust Bayes
+        - belief function
+        - belief functions
+
+    - name: Geometric deep learning
+      weight: 1.3
+      description: >
+        Machine learning that respects geometric structure, symmetry, invariance, and
+        equivariance, including graph neural networks, manifold learning, geometric
+        representation learning, and group-equivariant neural networks.
+      aliases:
+        - geometric deep learning
+        - graph neural network
+        - graph neural networks
+        - equivariant neural network
+        - equivariant neural networks
+        - manifold learning
+        - geometric representation learning
+
+  semantic:
+    enabled: true
+    model_name: sentence-transformers/all-MiniLM-L6-v2
+    # The two weights are normalised automatically, so they need not sum to one.
+    semantic_weight: 0.7
+    lexical_weight: 0.3
+    min_similarity: 0.25
+    top_theme_matches: 3
+
+  # Optional penalties still use exact title/abstract matching.
   negative_keywords: {}
 
 email:

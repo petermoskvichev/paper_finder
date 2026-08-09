@@ -1,4 +1,4 @@
-"""Send a plain-text digest through the Gmail API."""
+"""Send multipart plain-text and HTML digests through the Gmail API."""
 
 from __future__ import annotations
 
@@ -26,6 +26,7 @@ def build_email_message(
     recipient: str,
     subject: str,
     body: str,
+    html_body: str | None = None,
 ) -> EmailMessage:
     """Build the RFC-compatible MIME message submitted to Gmail."""
     message = EmailMessage()
@@ -33,6 +34,8 @@ def build_email_message(
     message["To"] = recipient
     message["Subject"] = subject
     message.set_content(body)
+    if html_body is not None:
+        message.add_alternative(html_body, subtype="html")
     return message
 
 
@@ -83,6 +86,7 @@ def send_email_via_gmail(
     recipient: str,
     subject: str,
     body: str,
+    html_body: str | None = None,
     token_file: Path = Path("token.json"),
 ) -> str:
     """Send one message and return the Gmail message ID."""
@@ -97,7 +101,7 @@ def send_email_via_gmail(
         ) from exc
 
     credentials = _load_credentials(token_file)
-    message = build_email_message(sender, recipient, subject, body)
+    message = build_email_message(sender, recipient, subject, body, html_body)
     encoded = base64.urlsafe_b64encode(message.as_bytes()).decode("ascii")
 
     try:
@@ -115,4 +119,3 @@ def send_email_via_gmail(
     if not message_id:
         raise GmailDeliveryError("Gmail API response did not include a message ID.")
     return str(message_id)
-

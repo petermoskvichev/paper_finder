@@ -24,8 +24,9 @@ def render_digest(
     ranked_papers: list[RankedPaper],
     lookback_hours: int,
     categories: tuple[str, ...],
+    abstract_length: int | None = ABSTRACT_LENGTH,
 ) -> str:
-    """Render a compact plain-text digest for terminal or email use."""
+    """Render a digest, optionally limiting each abstract to a character count."""
     lines = [
         "arXiv research digest",
         f"Window: last {lookback_hours} hours | Categories: {', '.join(categories)}",
@@ -43,19 +44,30 @@ def render_digest(
             f"   Score: {ranked.score:.2f} | Submitted: "
             f"{paper.published_at:%Y-%m-%d %H:%M UTC} | arXiv: {paper.arxiv_id}"
         )
+        if ranked.semantic_score:
+            lines.append(
+                f"   Semantic: {ranked.semantic_score:.2f} | "
+                f"Lexical: {ranked.lexical_score:.2f}"
+            )
         lines.extend(_wrapped_lines("Authors", ", ".join(paper.authors)))
         lines.extend(_wrapped_lines("Categories", ", ".join(paper.categories)))
         if ranked.positive_matches:
-            lines.extend(_wrapped_lines("Matches", ", ".join(ranked.positive_matches)))
+            lines.extend(
+                _wrapped_lines("Exact themes", ", ".join(ranked.positive_matches))
+            )
+        if ranked.semantic_matches:
+            semantic_matches = ", ".join(
+                f"{match.name} ({match.similarity:.0%})"
+                for match in ranked.semantic_matches
+            )
+            lines.extend(_wrapped_lines("Semantic themes", semantic_matches))
         if ranked.negative_matches:
             lines.extend(_wrapped_lines("Penalties", ", ".join(ranked.negative_matches)))
         lines.extend(_wrapped_lines("URL", paper.url))
-        lines.extend(
-            _wrapped_lines(
-                "Abstract",
-                shorten(paper.abstract, width=ABSTRACT_LENGTH, placeholder=" ..."),
-            )
-        )
+        abstract = paper.abstract
+        if abstract_length is not None:
+            abstract = shorten(abstract, width=abstract_length, placeholder=" ...")
+        lines.extend(_wrapped_lines("Abstract", abstract))
 
     return "\n".join(lines)
 

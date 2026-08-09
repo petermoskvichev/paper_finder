@@ -1,33 +1,19 @@
 # arXiv Paper Finder
 
-A small Python project that fetches newly submitted papers from the official arXiv API,
-scores them against a configurable research profile, prints a ranked digest, and can send
-that digest through the Gmail API. A GitHub Actions workflow can run it every morning.
+A small Python application that finds newly published arXiv papers matching a personal
+research profile and sends a daily email digest.
 
-The ranking is deliberately simple and explainable. Semantic ranking, LLM summaries,
-HTML email, and persistent seen-paper storage are not implemented yet.
+It queries configurable arXiv category groups, removes duplicate cross-lists, and ranks
+papers using a combination of:
 
-## Project structure
+- semantic similarity to natural-language research themes; and
+- exact aliases such as `trustworthy ML`, with optional negative keywords.
 
-```text
-.
-├── .github/workflows/daily-digest.yml  # Manual and daily GitHub Actions run
-├── arxiv_digest/
-│   ├── __main__.py       # Fetch/rank/print/send command
-│   ├── arxiv_client.py   # Official API query and Atom parsing
-│   ├── config.py         # YAML loading and validation
-│   ├── digest.py         # Reusable plain-text digest rendering
-│   ├── gmail_auth.py     # One-time local OAuth consent helper
-│   ├── gmail_sender.py   # Gmail API message delivery
-│   ├── models.py         # Core paper/ranking data models
-│   └── ranking.py        # Keyword relevance scoring
-├── tests/
-├── profile.yaml          # Research and email profile
-├── requirements.txt
-└── .gitignore
-```
+Semantic ranking runs locally with Sentence Transformers—paper text is not sent to an LLM.
+The default profile scans the previous 24 hours and emails at most five papers. If none are
+found, no email is sent.
 
-## Local setup
+## Setup and local use
 
 Python 3.10 or newer is required.
 
@@ -37,92 +23,77 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-Edit `profile.yaml` to choose the categories, lookback window, keyword weights, output
-limit, sender, and recipient. To print a digest without sending email:
+Edit `profile.yaml` to configure categories, research themes, ranking weights, email
+addresses, the lookback window, and the paper limit. Then print a digest locally:
 
 ```bash
 python -m arxiv_digest --config profile.yaml
 ```
 
-## Authorize Gmail and send a real test
+The first run downloads the embedding model; subsequent runs use the local cache. For a
+larger test window:
 
-The application requests only the `gmail.send` OAuth scope. It never needs your Gmail
-password.
+```bash
+python -m arxiv_digest --lookback-hours 168
+```
 
-1. Open the [Google Cloud Console](https://console.cloud.google.com/), create or select a
-   project, and enable the Gmail API.
-2. In Google Auth Platform, configure the consent screen. For a personal Gmail account,
-   select an External audience and add `peter.mosk123@gmail.com` as a test user.
-3. Create an OAuth client with application type **Desktop app**. Download it into this
-   folder as `credentials.json`.
-4. Run the one-time browser authorization:
+## Gmail setup
+
+1. Enable the Gmail API in the [Google Cloud Console](https://console.cloud.google.com/).
+2. Configure the OAuth consent screen and add your Gmail account as a test user.
+3. Create a **Desktop app** OAuth client and save its download as `credentials.json`.
+4. Authorize the application:
 
    ```bash
    python -m arxiv_digest.gmail_auth --client-secrets credentials.json
    ```
 
-   This creates `token.json` for local sending and `.env.github` for importing three
-   separate GitHub Secrets. Both files are private, ignored by Git, and written with
-   owner-only permissions.
-5. Send the current digest to the address in `profile.yaml`:
+5. Send a test digest:
 
    ```bash
-   python -m arxiv_digest --config profile.yaml --send-email
+   python -m arxiv_digest --send-email
    ```
 
-Google expires authorizations, including refresh tokens, after seven days while an
-External OAuth app using Gmail scopes remains in **Testing**. Before relying on the daily
-job, change its publishing status to **In production**. A personal, unverified app may
-still show Google's warning during consent; only authorize the Cloud project you created.
+Authorization creates `token.json` for local use and `.env.github` for GitHub Secrets.
+These files are ignored by Git and must never be committed. The application requests only
+the `gmail.send` permission. For a reliable daily job, change the OAuth app from
+**Testing** to **In production** so its refresh token does not expire after seven days.
 
-The OAuth setup follows Google's current
-[Gmail Python quickstart](https://developers.google.com/workspace/gmail/api/quickstart/python)
-and messages are sent with the documented
-[`users.messages.send` flow](https://developers.google.com/workspace/gmail/api/guides/sending).
+## Daily GitHub Action
 
-## GitHub Actions
-
-The workflow runs every day at 08:15 in `Asia/Singapore` and can also be started manually.
-Scheduled workflows only run after this project has been committed and pushed to the
-repository's default branch.
-
-From an authenticated GitHub CLI in the repository, import the generated secrets without
-printing their values:
+The workflow in `.github/workflows/daily-digest.yml` runs every day at 08:15 Singapore
+time. Import the generated secrets and push the repository:
 
 ```bash
 gh secret set -f .env.github
+git push
 ```
 
-After pushing the workflow, test it from the repository's **Actions** tab or run:
+You can test the workflow from GitHub's **Actions** tab or with:
 
 ```bash
 gh workflow run daily-digest.yml
 ```
 
-The workflow has read-only repository permissions. Its Gmail client ID, client secret,
-and refresh token come only from encrypted GitHub Secrets. Do not commit
-`credentials.json`, `token.json`, or `.env.github`; after importing `.env.github`, you can
-delete that duplicate local secrets file.
+The workflow uses encrypted Gmail secrets, a CPU-only inference runtime, and a cached
+embedding model. Scheduled execution begins only after the workflow is on the default
+branch.
 
-Until seen-paper storage is added, repeated runs inside the configured lookback window can
-send some of the same papers again.
+## Project layout
 
-## Ranking behavior
+```text
+arxiv_digest/                    Application modules
+tests/                           Unit tests
+profile.yaml                     Research and email configuration
+.github/workflows/daily-digest.yml
+requirements.txt
+```
 
-The program makes one combined category query, sorts it by submission date, removes
-duplicate arXiv IDs, keeps papers published inside `lookback_hours`, and ranks up to
-`max_papers`. Title occurrences are multiplied by `title_multiplier`; abstract occurrences
-use the configured keyword weight directly. Negative keyword weights are subtracted.
-
-arXiv publishes on a weekday announcement cycle, so a strict 48-hour window can be empty
-on weekends or holidays. Increase `lookback_hours` temporarily for a larger test set. If a
-category is especially busy, increase `fetch_limit` so the API page covers the full window.
-
-The client follows the [arXiv API manual](https://info.arxiv.org/help/api/user-manual.html)
-and its [API terms of use](https://info.arxiv.org/help/api/tou.html).
-
-## Tests
+Run the tests with:
 
 ```bash
 python -m unittest discover -s tests
 ```
+
+Persistent tracking of previously seen arXiv IDs and LLM summaries are not implemented
+yet.
