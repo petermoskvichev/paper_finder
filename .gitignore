@@ -42,3 +42,7 @@ data/
 # VS Code
 .vscode/
 *.code-workspace
+
+# Ignore credentials
+credentials.json
+token.json
