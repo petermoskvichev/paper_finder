@@ -1,0 +1,36 @@
+arxiv:
+  categories:
+    - cs.LG
+    - stat.ML
+    - cs.AI
+    - stat.ME
+  lookback_hours: 48
+  # Limits the number of newest API records inspected before date filtering.
+  fetch_limit: 300
+
+ranking:
+  max_papers: 10
+  # A title occurrence counts this many times as much as an abstract occurrence.
+  title_multiplier: 2.0
+  positive_keywords:
+    uncertainty calibration: 5.0
+    probabilistic prediction: 4.0
+    kernel methods: 3.0
+    RKHS: 3.0
+    conditional distributions: 4.0
+    conditional mean embeddings: 5.0
+    causal inference: 4.0
+    decision making: 3.0
+    trustworthy machine learning: 4.0
+    distribution shift: 4.0
+
+  # Optional penalties use the same title/abstract matching rule. For example:
+  # negative_keywords:
+  #   survey: 1.0
+  #   tutorial: 0.5
+  negative_keywords: {}
+
+email:
+  sender: peter.mosk123@gmail.com
+  recipient: peter.mosk123@gmail.com
+  subject_prefix: Daily arXiv research digest
