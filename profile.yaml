@@ -1,51 +1,26 @@
 arxiv:
-  # The workflow runs once per day, so this avoids overlapping daily digests.
+  # Used for manual rolling-window runs (for example, --lookback-hours 168).
   lookback_hours: 24
+
+  # Daily scheduled runs use arXiv's actual announcement/submission windows. This is
+  # important on Mondays, when the newly announced papers were submitted days earlier.
+  use_announcement_window: true
 
   # arXiv asks clients making repeated requests to wait three seconds between calls.
   request_delay_seconds: 3.0
 
-  # Groups are queried separately so busy fields cannot crowd niche subjects out of
-  # one shared result page. Papers cross-listed between groups are deduplicated.
+  # Keep retrieval focused on the original statistical machine-learning scope. The
+  # research themes below perform the more detailed interest filtering and ranking.
   category_groups:
-    - name: core_ml_and_statistics
+    - name: statistical_machine_learning
       categories:
         - cs.LG
         - stat.ML
         - cs.AI
         - stat.ME
-        - math.ST
-        - stat.CO
-      fetch_limit: 300
-
-    - name: mathematical_foundations
-      categories:
-        - math.CT
-        - math.PR
-        - math.DG
-        - math.OC
-      fetch_limit: 180
-
-    - name: formal_methods_and_control
-      categories:
-        - cs.LO
-        - cs.PL
-        - cs.SY
-        - eess.SY
-        - cs.MA
-        - cs.RO
-      fetch_limit: 220
-
-    - name: ai_safety_and_society
-      categories:
-        - cs.CY
-      fetch_limit: 120
-
-    - name: generative_modalities
-      categories:
-        - cs.CL
-        - cs.CV
-      fetch_limit: 300
+      # Monday's multi-day batch can exceed 300 results across these categories.
+      # The submitted-date bound keeps ordinary daily responses much smaller.
+      fetch_limit: 700
 
 ranking:
   max_papers: 5

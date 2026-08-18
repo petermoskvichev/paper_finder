@@ -30,6 +30,7 @@ class ArxivConfig:
     category_groups: tuple[CategoryGroup, ...]
     lookback_hours: int
     request_delay_seconds: float
+    use_announcement_window: bool
 
     @property
     def categories(self) -> tuple[str, ...]:
@@ -144,6 +145,12 @@ def _non_empty_string(value: Any, name: str, *, allow_line_breaks: bool = False)
     return cleaned
 
 
+def _boolean(value: Any, name: str) -> bool:
+    if not isinstance(value, bool):
+        raise ConfigError(f"'{name}' must be true or false.")
+    return value
+
+
 def _string_list(value: Any, name: str) -> tuple[str, ...]:
     if (
         not isinstance(value, list)
@@ -239,9 +246,7 @@ def load_config(path: Path) -> AppConfig:
     if semantic_weight + lexical_weight <= 0:
         raise ConfigError("At least one semantic or lexical ranking weight must be positive.")
 
-    enabled = semantic.get("enabled", True)
-    if not isinstance(enabled, bool):
-        raise ConfigError("'ranking.semantic.enabled' must be true or false.")
+    enabled = _boolean(semantic.get("enabled", True), "ranking.semantic.enabled")
 
     return AppConfig(
         arxiv=ArxivConfig(
@@ -252,6 +257,10 @@ def load_config(path: Path) -> AppConfig:
             request_delay_seconds=_non_negative_float(
                 arxiv.get("request_delay_seconds", 3.0),
                 "arxiv.request_delay_seconds",
+            ),
+            use_announcement_window=_boolean(
+                arxiv.get("use_announcement_window", False),
+                "arxiv.use_announcement_window",
             ),
         ),
         ranking=RankingConfig(

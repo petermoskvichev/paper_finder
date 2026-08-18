@@ -12,10 +12,14 @@ class ConfigTests(unittest.TestCase):
     def test_default_profile_loads_grouped_categories_and_themes(self) -> None:
         config = load_config(Path("profile.yaml"))
 
-        self.assertIn("math.CT", config.arxiv.categories)
-        self.assertIn("cs.CY", config.arxiv.categories)
-        self.assertGreater(len(config.arxiv.category_groups), 1)
+        self.assertEqual(
+            config.arxiv.categories,
+            ("cs.LG", "stat.ML", "cs.AI", "stat.ME"),
+        )
+        self.assertEqual(len(config.arxiv.category_groups), 1)
+        self.assertEqual(config.arxiv.category_groups[0].fetch_limit, 700)
         self.assertEqual(config.arxiv.lookback_hours, 24)
+        self.assertTrue(config.arxiv.use_announcement_window)
         self.assertEqual(config.ranking.max_papers, 5)
         self.assertTrue(config.ranking.semantic.enabled)
         self.assertIn(

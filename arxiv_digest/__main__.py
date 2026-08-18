@@ -26,6 +26,17 @@ def positive_int(value: str) -> int:
     return parsed
 
 
+def timezone_aware_datetime(value: str) -> datetime:
+    """Parse an ISO 8601 timestamp that includes a UTC offset."""
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be an ISO 8601 timestamp") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise argparse.ArgumentTypeError("must include a timezone offset")
+    return parsed.astimezone(timezone.utc)
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the command-line argument parser."""
     parser = argparse.ArgumentParser(
@@ -53,6 +64,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("token.json"),
         help="Local Gmail OAuth token file (default: token.json).",
     )
+    parser.add_argument(
+        "--reference-time",
+        type=timezone_aware_datetime,
+        help=(
+            "Anchor the fetch window to an ISO 8601 time; used by delayed "
+            "scheduled jobs."
+        ),
+    )
     return parser
 
 
@@ -63,11 +82,17 @@ def main() -> int:
     try:
         config = load_config(args.config)
         lookback_hours = args.lookback_hours or config.arxiv.lookback_hours
-        client = ArxivClient()
+        client = ArxivClient(
+            now=(lambda: args.reference_time) if args.reference_time else None
+        )
         papers = client.fetch_recent(
             category_groups=config.arxiv.category_groups,
             lookback_hours=lookback_hours,
             request_delay_seconds=config.arxiv.request_delay_seconds,
+            use_announcement_window=(
+                config.arxiv.use_announcement_window
+                and args.lookback_hours is None
+            ),
         )
         ranked = rank_papers(papers, config.ranking)
     except (ConfigError, ArxivAPIError, SemanticRankingError) as exc:
@@ -75,10 +100,16 @@ def main() -> int:
         return 1
 
     selected_papers = ranked[: config.ranking.max_papers]
+    window_description = (
+        "the latest arXiv announcement"
+        if config.arxiv.use_announcement_window and args.lookback_hours is None
+        else None
+    )
     digest = render_digest(
         selected_papers,
         lookback_hours=lookback_hours,
         categories=config.arxiv.categories,
+        window_description=window_description,
     )
     print(digest)
 
@@ -92,11 +123,13 @@ def main() -> int:
             lookback_hours=lookback_hours,
             categories=config.arxiv.categories,
             abstract_length=None,
+            window_description=window_description,
         )
         email_html = render_html_digest(
             selected_papers,
             lookback_hours=lookback_hours,
             categories=config.arxiv.categories,
+            window_description=window_description,
         )
         subject = (
             f"{config.email.subject_prefix} | "

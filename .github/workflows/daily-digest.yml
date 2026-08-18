@@ -3,8 +3,9 @@ name: Daily arXiv digest
 on:
   workflow_dispatch:
   schedule:
-    - cron: "15 8 * * *"
-      timezone: "Asia/Singapore"
+    # 00:15 UTC is 08:15 in Singapore. arXiv has new announcement batches on
+    # Singapore Mondays-Fridays, so weekend requests would only repeat old data.
+    - cron: "15 0 * * 1-5"
 
 permissions:
   contents: read
@@ -43,7 +44,13 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Fetch papers and send digest
-        run: python -m arxiv_digest --config profile.yaml --send-email
+        shell: bash
+        run: |
+          reference_args=()
+          if [[ "$GITHUB_EVENT_NAME" == "schedule" ]]; then
+            reference_args=(--reference-time "$(date -u +%Y-%m-%dT00:15:00+00:00)")
+          fi
+          python -m arxiv_digest --config profile.yaml --send-email "${reference_args[@]}"
         env:
           GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
           GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}

@@ -117,8 +117,10 @@ def render_html_digest(
     ranked_papers: list[RankedPaper],
     lookback_hours: int,
     categories: tuple[str, ...],
+    window_description: str | None = None,
 ) -> str:
     """Render ranked papers as responsive HTML with complete abstracts."""
+    window = window_description or f"the last {lookback_hours} hours"
     category_summary = " &nbsp;&bull;&nbsp; ".join(
         escape(category) for category in categories
     )
@@ -162,7 +164,7 @@ def render_html_digest(
               <h1 style="margin:7px 0 8px 0;font-size:30px;line-height:38px;
                          color:#ffffff;font-weight:700;">Your arXiv digest</h1>
               <div style="font-size:14px;line-height:22px;color:#cbd5e1;">
-                {len(ranked_papers)} papers from the last {lookback_hours} hours
+                {len(ranked_papers)} papers from {escape(window)}
               </div>
               <div style="margin-top:6px;font-size:13px;line-height:21px;color:#94a3b8;">
                 {category_summary}

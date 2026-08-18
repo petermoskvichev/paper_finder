@@ -10,8 +10,13 @@ papers using a combination of:
 - exact aliases such as `trustworthy ML`, with optional negative keywords.
 
 Semantic ranking runs locally with Sentence Transformers—paper text is not sent to an LLM.
-The default profile scans the previous 24 hours and emails at most five papers. If none are
-found, no email is sent.
+The default profile searches `cs.LG`, `stat.ML`, `cs.AI`, and `stat.ME`, then emails at
+most five papers. Scheduled runs use arXiv's announcement windows rather than a rolling
+24-hour cutoff, so the Monday list is not lost merely because its papers were submitted
+before the weekend. If no matching announcement exists, no email is sent.
+
+Temporary arXiv responses such as HTTP 429 and 5xx are retried with exponential backoff;
+the server's `Retry-After` header is honored when present.
 
 ## Setup and local use
 
@@ -28,6 +33,12 @@ addresses, the lookback window, and the paper limit. Then print a digest locally
 
 ```bash
 python -m arxiv_digest --config profile.yaml
+```
+
+Or send an email manually
+
+```bash
+python -m arxiv_digest --config profile.yaml --send-email
 ```
 
 The first run downloads the embedding model; subsequent runs use the local cache. For a
@@ -61,8 +72,10 @@ the `gmail.send` permission. For a reliable daily job, change the OAuth app from
 
 ## Daily GitHub Action
 
-The workflow in `.github/workflows/daily-digest.yml` runs every day at 08:15 Singapore
-time. Import the generated secrets and push the repository:
+The workflow in `.github/workflows/daily-digest.yml` uses an explicit 00:15 UTC cron,
+which is 08:15 Singapore time, Monday through Friday. Those are the Singapore calendar
+days on which arXiv normally has a new announcement batch. Import the generated secrets
+and push the repository:
 
 ```bash
 gh secret set -f .env.github
@@ -77,7 +90,10 @@ gh workflow run daily-digest.yml
 
 The workflow uses encrypted Gmail secrets, a CPU-only inference runtime, and a cached
 embedding model. Scheduled execution begins only after the workflow is on the default
-branch.
+branch. GitHub documents scheduled Actions as best-effort and may occasionally start a
+run late; the explicit UTC cron avoids an additional delay observed with the
+timezone-aware scheduler. The command anchors its paper window to the intended 08:15
+time even if GitHub starts the runner later.
 
 ## Project layout
 

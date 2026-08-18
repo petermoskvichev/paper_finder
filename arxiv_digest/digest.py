@@ -25,11 +25,13 @@ def render_digest(
     lookback_hours: int,
     categories: tuple[str, ...],
     abstract_length: int | None = ABSTRACT_LENGTH,
+    window_description: str | None = None,
 ) -> str:
     """Render a digest, optionally limiting each abstract to a character count."""
+    window = window_description or f"last {lookback_hours} hours"
     lines = [
         "arXiv research digest",
-        f"Window: last {lookback_hours} hours | Categories: {', '.join(categories)}",
+        f"Window: {window} | Categories: {', '.join(categories)}",
         f"Papers shown: {len(ranked_papers)}",
     ]
 
