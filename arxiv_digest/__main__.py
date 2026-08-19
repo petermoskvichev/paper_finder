@@ -83,7 +83,10 @@ def main() -> int:
         config = load_config(args.config)
         lookback_hours = args.lookback_hours or config.arxiv.lookback_hours
         client = ArxivClient(
-            now=(lambda: args.reference_time) if args.reference_time else None
+            now=(lambda: args.reference_time) if args.reference_time else None,
+            retry_notice=lambda message: print(
+                f"Warning: {message}", file=sys.stderr, flush=True
+            ),
         )
         papers = client.fetch_recent(
             category_groups=config.arxiv.category_groups,

@@ -15,8 +15,10 @@ most five papers. Scheduled runs use arXiv's announcement windows rather than a 
 24-hour cutoff, so the Monday list is not lost merely because its papers were submitted
 before the weekend. If no matching announcement exists, no email is sent.
 
-Temporary arXiv responses such as HTTP 429 and 5xx are retried with exponential backoff;
-the server's `Retry-After` header is honored when present.
+Temporary arXiv responses are retried, and the server's `Retry-After` header is honored
+when present. Because arXiv also uses headerless 429 responses when the service is at
+capacity, those retries are spaced five minutes apart. Network and 5xx failures retain
+exponential backoff.
 
 ## Setup and local use
 

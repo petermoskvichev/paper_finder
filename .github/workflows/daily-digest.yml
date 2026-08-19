@@ -17,7 +17,9 @@ concurrency:
 jobs:
   send-digest:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Headerless arXiv 429 responses are retried at five-minute intervals. Leave
+    # enough room for that 15-minute retry window plus setup and ranking.
+    timeout-minutes: 40
     env:
       HF_HOME: ${{ github.workspace }}/.cache/huggingface
 

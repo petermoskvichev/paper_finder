@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from email.utils import format_datetime
 
 import requests
 
@@ -124,6 +125,66 @@ class ArxivClientTests(unittest.TestCase):
         self.assertEqual(len(papers), 1)
         self.assertEqual(len(session.calls), 2)
         self.assertEqual(delays, [7.0])
+
+    def test_retry_after_date_uses_wall_clock_not_fetch_reference_time(self) -> None:
+        fetch_reference = datetime(2026, 8, 18, 0, 15, tzinfo=timezone.utc)
+        retry_reference = datetime(2026, 8, 18, 2, 0, tzinfo=timezone.utc)
+        session = FakeSession(
+            [
+                FakeResponse(
+                    b"Rate exceeded",
+                    429,
+                    {"Retry-After": format_datetime(retry_reference + timedelta(minutes=1))},
+                ),
+                FakeResponse(
+                    atom_feed(
+                        "2608.00003",
+                        ("stat.ML",),
+                        datetime(2026, 8, 17, 23, 0, tzinfo=timezone.utc),
+                    )
+                ),
+            ]
+        )
+        delays: list[float] = []
+        client = ArxivClient(
+            session=session,  # type: ignore[arg-type]
+            sleep=delays.append,
+            now=lambda: fetch_reference,
+            retry_now=lambda: retry_reference,
+        )
+
+        papers = client.fetch_recent(
+            (CategoryGroup("statistics", ("stat.ML",), 100),),
+            48,
+            3.0,
+        )
+
+        self.assertEqual(len(papers), 1)
+        self.assertEqual(delays, [60.0])
+
+    def test_429_without_retry_after_is_retried_every_five_minutes(self) -> None:
+        session = FakeSession(
+            [FakeResponse(b"Rate exceeded", 429) for _ in range(4)]
+        )
+        delays: list[float] = []
+        notices: list[str] = []
+        client = ArxivClient(
+            session=session,  # type: ignore[arg-type]
+            sleep=delays.append,
+            retry_notice=notices.append,
+        )
+
+        with self.assertRaisesRegex(ArxivAPIError, "Server response: Rate exceeded"):
+            client.fetch_recent(
+                (CategoryGroup("statistics", ("stat.ML",), 100),),
+                48,
+                3.0,
+            )
+
+        self.assertEqual(len(session.calls), 4)
+        self.assertEqual(delays, [300.0, 300.0, 300.0])
+        self.assertEqual(len(notices), 3)
+        self.assertIn("attempt 2/4", notices[0])
 
     def test_non_retryable_client_error_fails_immediately(self) -> None:
         session = FakeSession([FakeResponse(b"Bad request", 400)])

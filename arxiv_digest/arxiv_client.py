@@ -38,18 +38,28 @@ class ArxivClient:
         *,
         session: requests.Session | None = None,
         sleep: Callable[[float], None] = time.sleep,
+        retry_notice: Callable[[str], None] | None = None,
         now: Callable[[], datetime] | None = None,
+        retry_now: Callable[[], datetime] | None = None,
         max_attempts: int = 4,
         retry_backoff_seconds: float = 30.0,
+        rate_limit_backoff_seconds: float = 300.0,
     ) -> None:
         if max_attempts < 1:
             raise ValueError("max_attempts must be at least one")
+        if retry_backoff_seconds < 0:
+            raise ValueError("retry_backoff_seconds cannot be negative")
+        if rate_limit_backoff_seconds < 0:
+            raise ValueError("rate_limit_backoff_seconds cannot be negative")
         self.timeout_seconds = timeout_seconds
         self.session = session or requests.Session()
         self.sleep = sleep
+        self.retry_notice = retry_notice or (lambda _message: None)
         self.now = now or (lambda: datetime.now(timezone.utc))
+        self.retry_now = retry_now or (lambda: datetime.now(timezone.utc))
         self.max_attempts = max_attempts
         self.retry_backoff_seconds = retry_backoff_seconds
+        self.rate_limit_backoff_seconds = rate_limit_backoff_seconds
         self.session.headers.update(
             {"User-Agent": "paper-finder/0.2 (personal research digest)"}
         )
@@ -149,19 +159,37 @@ class ArxivClient:
                     break
                 retry_after = _retry_after_seconds(
                     getattr(exc.response, "headers", {}).get("Retry-After"),
-                    reference_time=self.now(),
+                    reference_time=self.retry_now(),
                 )
                 delay = (
                     retry_after
                     if retry_after is not None
-                    else self.retry_backoff_seconds * (2 ** (attempt - 1))
+                    else (
+                        self.rate_limit_backoff_seconds
+                        if status_code == 429
+                        else self.retry_backoff_seconds * (2 ** (attempt - 1))
+                    )
+                )
+                failure = (
+                    f"HTTP {status_code}" if status_code is not None else str(exc)
+                )
+                self.retry_notice(
+                    f"arXiv request for category group '{group.name}' failed with "
+                    f"{failure}; retrying in {delay:g} seconds "
+                    f"(attempt {attempt + 1}/{self.max_attempts})."
                 )
                 self.sleep(delay)
 
         attempts = f" after {attempts_made} attempts" if attempts_made > 1 else ""
+        response_excerpt = _response_excerpt(
+            getattr(last_error, "response", None) if last_error else None
+        )
+        response_detail = (
+            f" Server response: {response_excerpt}" if response_excerpt else ""
+        )
         raise ArxivAPIError(
             f"arXiv API request failed for category group '{group.name}'{attempts}: "
-            f"{last_error}"
+            f"{last_error}.{response_detail}"
         ) from last_error
 
     @staticmethod
@@ -228,6 +256,18 @@ def _parse_datetime(value: str) -> datetime:
 
 def _clean_text(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
+
+
+def _response_excerpt(response: requests.Response | None) -> str:
+    """Return a bounded one-line response body for actionable API errors."""
+    if response is None:
+        return ""
+    content = getattr(response, "content", b"")
+    if isinstance(content, bytes):
+        text = content.decode("utf-8", errors="replace")
+    else:
+        text = str(content)
+    return _clean_text(text)[:200]
 
 
 def latest_announcement_submission_window(
